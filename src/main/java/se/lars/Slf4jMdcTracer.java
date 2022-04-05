@@ -1,8 +1,11 @@
 package se.lars;
 
 import io.vertx.core.Context;
+import io.vertx.core.MultiMap;
+import io.vertx.core.spi.tracing.SpanKind;
 import io.vertx.core.spi.tracing.TagExtractor;
 import io.vertx.core.spi.tracing.VertxTracer;
+import io.vertx.core.tracing.TracingPolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -17,7 +20,14 @@ public class Slf4jMdcTracer implements VertxTracer<Slf4jMdcTracer.Trace, Slf4jMd
   private static final Logger log = LoggerFactory.getLogger(Slf4jMdcTracer.class);
 
   @Override
-  public <R> Trace receiveRequest(Context context, R request, String operation, Iterable<Map.Entry<String, String>> headers, TagExtractor<R> tagExtractor) {
+  public <R> Trace receiveRequest(Context context,
+                                  SpanKind kind,
+                                  TracingPolicy policy,
+                                  R request,
+                                  String operation,
+                                  Iterable<Map.Entry<String, String>> headers,
+                                  TagExtractor<R> tagExtractor) {
+
     log.info("receiveRequest() request {} operation {}", request != null ? request.getClass().getName() : "null", operation);
 
     Trace trace = decode(headers);
@@ -32,7 +42,13 @@ public class Slf4jMdcTracer implements VertxTracer<Slf4jMdcTracer.Trace, Slf4jMd
   }
 
   @Override
-  public <R> Trace sendRequest(Context context, R request, String operation, BiConsumer<String, String> headers, TagExtractor<R> tagExtractor) {
+  public <R> Trace sendRequest(Context context,
+                               SpanKind kind,
+                               TracingPolicy policy,
+                               R request,
+                               String operation,
+                               BiConsumer<String, String> headers,
+                               TagExtractor<R> tagExtractor) {
     log.info("sendRequest() request {} operation {}", request != null ? request.getClass().getName() : "null", operation);
     Trace trace = ofNullable(context.<Trace>getLocal("trace")).orElseGet(Trace::new);
     headers.accept("trace-id", "" + trace.id);
@@ -52,10 +68,16 @@ public class Slf4jMdcTracer implements VertxTracer<Slf4jMdcTracer.Trace, Slf4jMd
 
   private Trace decode(Iterable<Map.Entry<String, String>> headers) {
     String traceId = null;
-    for (Map.Entry<String, String> header : headers) {
-      if ("trace-id".equals(header.getKey())) {
-        traceId = header.getValue();
-        break;
+
+    if (headers instanceof MultiMap) {
+      MultiMap httpHeaders = (MultiMap) headers;
+      traceId = httpHeaders.get("trace-id");
+    } else {
+      for (Map.Entry<String, String> header : headers) {
+        if ("trace-id".equals(header.getKey())) {
+          traceId = header.getValue();
+          break;
+        }
       }
     }
     return ofNullable(traceId).map(Trace::new).orElseGet(Trace::new);

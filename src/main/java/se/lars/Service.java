@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 public class Service extends AbstractVerticle {
   private static final Logger log = LoggerFactory.getLogger(Service.class);
   private WebClient client;
+
   @Override
   public void start(Promise<Void> startPromise) {
     vertx.eventBus().consumer("service", this::handleRequest);
